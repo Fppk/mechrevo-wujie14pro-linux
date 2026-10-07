@@ -1,0 +1,2 @@
+event=wmi.*00000020.*
+action=/etc/acpi/power-mode-toggle.sh

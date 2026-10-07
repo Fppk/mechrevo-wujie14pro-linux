@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+"""
+机械革命无界14 Pro - 电源模式双向无缝同步守护进程
+当用户在 KDE / GNOME 桌面托盘点击切换 Power Profile 时，
+自动调用 /proc/wujie_mode (WMAA) 触发硬件 EC 与 AMD SMU 功耗墙与外设联动。
+具备防死锁回环检测，确保与物理 Fn+F1 按键 100% 状态同频。
+"""
+
+import sys
+import os
+import time
+from gi.repository import Gio, GLib
+
+PROC_PATH = "/proc/wujie_mode"
+
+def is_ac_online():
+    for p in ["/sys/class/power_supply/ACAD/online", "/sys/class/power_supply/ADP1/online", "/sys/class/power_supply/AC/online"]:
+        try:
+            with open(p, "r") as f:
+                return f.read().strip() == "1"
+        except Exception:
+            continue
+    return False
+
+def get_hw_mode():
+    try:
+        with open(PROC_PATH, "r") as f:
+            return int(f.read().strip())
+    except Exception:
+        return -1
+
+def write_hw_mode(mode):
+    try:
+        with open(PROC_PATH, "w") as f:
+            f.write(str(mode))
+    except Exception as e:
+        sys.stderr.write(f"wujie-power-sync: Failed to write {PROC_PATH}: {e}\n")
+
+def on_properties_changed(proxy, changed_properties, invalidated_properties):
+    val = changed_properties.lookup_value("ActiveProfile", None)
+    if not val:
+        return
+    profile = val.get_string()
+    hw_mode = get_hw_mode()
+
+    if profile == "power-saver":
+        # 用户在系统托盘选择了省电模式 -> 联动硬件切入平板极度省电模式 (EC:2)
+        if hw_mode != 2:
+            write_hw_mode(2)
+    elif profile in ["balanced", "performance"]:
+        # 用户在系统托盘选择了平衡/性能模式 -> 联动硬件切入正常模式 (插电 0, 电池 1)
+        if hw_mode == 2:
+            target = 0 if is_ac_online() else 1
+            write_hw_mode(target)
+
+def main():
+    # 确保 proc 接口存在
+    if not os.path.exists(PROC_PATH):
+        sys.stderr.write(f"wujie-power-sync: {PROC_PATH} does not exist, exiting.\n")
+        sys.exit(1)
+
+    try:
+        bus = Gio.bus_get_sync(Gio.BusType.SYSTEM, None)
+        proxy = Gio.DBusProxy.new_sync(
+            bus,
+            Gio.DBusProxyFlags.NONE,
+            None,
+            "net.hadess.PowerProfiles",
+            "/net/hadess/PowerProfiles",
+            "net.hadess.PowerProfiles",
+            None,
+        )
+    except Exception as e:
+        sys.stderr.write(f"wujie-power-sync: Failed to connect to net.hadess.PowerProfiles: {e}\n")
+        sys.exit(1)
+
+    proxy.connect("g-properties-changed", on_properties_changed)
+
+    # 首次启动：确保两边状态一致
+    initial_prop = proxy.get_cached_property("ActiveProfile")
+    if initial_prop:
+        profile = initial_prop.get_string()
+        hw_mode = get_hw_mode()
+        if profile == "power-saver" and hw_mode != 2:
+            write_hw_mode(2)
+        elif profile in ["balanced", "performance"] and hw_mode == 2:
+            target = 0 if is_ac_online() else 1
+            write_hw_mode(target)
+
+    loop = GLib.MainLoop()
+    try:
+        loop.run()
+    except KeyboardInterrupt:
+        pass
+
+if __name__ == "__main__":
+    main()

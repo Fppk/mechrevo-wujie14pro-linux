@@ -1,0 +1,26 @@
+--- a/drivers/hid/hid-ids.h
++++ b/drivers/hid/hid-ids.h
+@@ -660,6 +660,9 @@
+ #define USB_DEVICE_ID_UGT_VR_TOUCHPAD_2800	0x2800
+ #define USB_DEVICE_ID_UGT_VR_TOUCHPAD_2801	0x2801
+ 
++#define I2C_VENDOR_ID_HANTICK		0x0911
++#define I2C_PRODUCT_ID_HANTICK_5288	0x5288
++
+ #define USB_VENDOR_ID_HANWANG		0x0b57
+ #define USB_DEVICE_ID_HANWANG_TABLET_FIRST	0x0001
+ #define USB_DEVICE_ID_HANWANG_TABLET_LAST	0x00ff
+--- a/drivers/hid/hid-multitouch.c
++++ b/drivers/hid/hid-multitouch.c
+@@ -2729,6 +2729,11 @@ static const struct hid_device_id mt_devices[] = {
+ 		HID_DEVICE(HID_BUS_ANY, HID_GROUP_ANY, USB_VENDOR_ID_SIS_TOUCH,
+ 			HID_ANY_ID) },
+ 
++	/* Hantick HTIX5288:00 (Mechrevo Wujie 14 Pro touchpad) */
++	{ .driver_data = MT_CLS_WIN_8_FORCE_MULTI_INPUT_NSMU,
++		HID_DEVICE(BUS_I2C, HID_GROUP_MULTITOUCH_WIN_8,
++			   I2C_VENDOR_ID_HANTICK, I2C_PRODUCT_ID_HANTICK_5288) },
++
+ 	/* Asus ROG Flow Z13 (2025) GZ302EA keyboard-cover touchpad */
+ 	{ .driver_data = MT_CLS_ASUS_ROG_Z13_FOLIO,
+ 		HID_DEVICE(BUS_USB, HID_GROUP_MULTITOUCH_WIN_8,
